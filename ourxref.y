@@ -1,13 +1,22 @@
+/******************************************************************************************************************************************/
+/*                                 Copyright 2020 Dr Christophe Meudec                                                                    */
+/*                                     <http://www.echancrure.eu/>                                                                        */
+/* This file is part of Mika.                                                                                                             */
+/* Mika is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by      */  
+/*   the Free Software Foundation, either version 3 of the License, or (at your option) any later version.                                */
+/* Mika is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of                 */
+/*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.                           */
+/* You should have received a copy of the GNU General Public License along with Mika.  If not, see <https://www.gnu.org/licenses/>.       */
+/******************************************************************************************************************************************/
 /*******************************************************************/
 /* Performs the role of gnatxref: read the .ali files to build     */
 /*   references data structures                                    */
-/* C. Meudec                                                       */
-/* to generate parser call: win_bison ourxref.y                    */
+/* to generate parser call: win_bison -d ourxref.y                 */
 /* to test: ourxref -d -l"C:\GNAT\2010\bin\gnatls" ch7_1           */
 /*******************************************************************/
 
 %{
-#pragma warning( once : 4996 )  //ignore warnings such as : warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+#pragma warning( disable : 4996 )  //ignore warnings such as : warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
 
 #include <errno.h>  //system error constants
 #include <stdio.h>
@@ -18,13 +27,20 @@
 #include <direct.h>             //for directory creation
 #include <time.h>               //for time and date retrieval
 
-void my_exit(int );             //attempts to close handles and delete generated files prior to caling exit(int);
+extern int yylex();
+extern int yyparse();
+extern FILE* yyin;
+extern int yylineno;
+extern char *yytext;
+void yyerror(const char*);
+
+
+void my_exit(int);             //attempts to close handles and delete generated files prior to caling exit(int);
 
 #include "find_path.c"          //used to find file names using gnat ls
 #include "list_of_dependencies.c"
 #include "list_of_ali_files.c"
 
-extern void yyerror(char const *);
 char original_file[_MAX_PATH*10];           // original file name
 char current_referenced_file[_MAX_PATH];    // the file that we use for the current reference
 char original_referenced_file[_MAX_PATH];
@@ -33,22 +49,23 @@ char user_gnatls_call_str[_MAX_PATH*10];
 char user_gnatproject_call_str[_MAX_PATH*10];
 char gnatlsExe[_MAX_PATH];                  // string denoting the name of the gnat ls executable
 int debugMode = 0;
+int error_count = 0;    //number of parsing errors
 int first_ref;
 int new_file;
 char *tmp_str;
-extern int read_to_line_end(FILE *);
 extern void read_up_to_DLETTER(FILE *);
 extern FILE *yyin;
 char *get_ali(char *);
 
-struct line_col_t {
-  char *line;
-  char letter;
-  char *column;
-} ;
-
 %}
-
+//see https://stackoverflow.com/a/4941440/671627
+%code requires {
+    struct line_col_t {
+      char *line;
+      char letter;
+      char *column;
+    };
+}
 //values returned by lex.l via yylval
 %union {char *id;
         struct line_col_t line_col;
@@ -209,13 +226,12 @@ bracket : BRACKETED         {free($1);} //{if (debugMode) fprintf(stderr, "\nbra
         | ANGLE_BRACKETED   {free($1);} //{if (debugMode) fprintf(stderr, "\nangle %s", $1);}
         ;
 %%
-#include "lex.yy.c"        //the lexical analyser created by ALex
+//#include "lex.yy.c"        //the lexical analyser created by FLex
 
 int main(int argc, char *argv[])
 {
-    extern int error_count; //defined in ada.l
-    extern int yyparse();
-    extern int yylineno;
+    //extern int yyparse();
+    //extern int yylineno;
     int i;
     char path_found[_MAX_PATH];             //the path that was searched
     strcpy(user_gnatls_call_str, "");
@@ -224,24 +240,24 @@ int main(int argc, char *argv[])
     for(i=1;i<argc-1;i++)
         {//processing switches
          if(argv[i][0] == '-') {
-		   switch(argv[i][1]) {
-					case 'd' :
-						debugMode = 1;  //we are in debug mode : will affect output of warnings amongst other things
-						break;
+           switch(argv[i][1]) {
+                    case 'd' :
+                        debugMode = 1;  //we are in debug mode : will affect output of warnings amongst other things
+                        break;
                     case 'c' :
-						strcpy(user_gnatls_call_str, &argv[i][2]);
-						break;
+                        strcpy(user_gnatls_call_str, &argv[i][2]);
+                        break;
                     case 'e' :
-						strcpy(user_gnatproject_call_str, &argv[i][2]);
-						break;
+                        strcpy(user_gnatproject_call_str, &argv[i][2]);
+                        break;
                     case 'l' :
                         strcpy(gnatlsExe, &argv[i][2]);     //the caller supplied string executable for gnat ls
                         break;
-					default :
+                    default :
                         {fprintf(stderr, "Ourxref Warning: unknown option is ignored : %s\n", argv[i]);
                          fflush(stderr);
                         }
-		   }
+           }
          }
          else {fprintf(stderr, "Ourxref Warning: unknown parameter is ignored : %s\n", argv[i]); fflush(stderr);}
 
@@ -303,7 +319,7 @@ char *get_ali(char *source_name)
 }
 
 //handles parsing errors
-void yyerror(char const *s)
+void yyerror(const char* s)
 {
         extern int yychar;
         error_count++;
@@ -344,8 +360,7 @@ void yyerror(char const *s)
         exit(EXIT_FAILURE);
 }// yyerror function
 
-void my_exit(int exit_code)
-{
+void my_exit(int exit_code) {
   exit(exit_code);
 }
 

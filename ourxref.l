@@ -1,30 +1,39 @@
-/*****************************************************************************************************************/
-/*                                  Copyright 2009 Midoan Software Engineering SolutionsLtd.                     */
-/*             No part of this document may be reproduced in any manner without the express written authority of */
-/*                                            Midoan Software Engineering Solutions Ltd.                         */
-/*                       Midoan Software Engineering Solutions Ltd. 18 The Glen, Mortarstown, Carlow, Ireland    */
-/*****************************************************************************************************************/
-/* A FLEX grammar for SPARK Ada                                         */
-/* alex ourxref.l -o ourxref_lex.c                                              */
+/******************************************************************************************************************************************/
+/*                                 Copyright 2020 Dr Christophe Meudec                                                                    */
+/*                                     <http://www.echancrure.eu/>                                                                        */
+/* This file is part of Mika.                                                                                                             */
+/* Mika is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by      */  
+/*   the Free Software Foundation, either version 3 of the License, or (at your option) any later version.                                */
+/* Mika is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of                 */
+/*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.                           */
+/* You should have received a copy of the GNU General Public License along with Mika.  If not, see <https://www.gnu.org/licenses/>.       */
+/******************************************************************************************************************************************/
+/*                                                                          */
+/* win_flex --wincompat ourxref.l                                           */
+/* generates lex.yy.c                                                       */
 /************************************************************************/
 
 %option yylineno
 %{
+#pragma warning( disable : 4996 )  //ignore warnings such as : warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+
 #include "string.h"
 #include "stdlib.h"
 #include "ctype.h"
 #include "math.h"
 
+#include "ourxref.tab.h"
+
 void get_line_col(char *);
 void read_up_to_DLETTER(FILE *);
-int error_count;    //number of parsing errors
 
 %}
+
 /*do not comment the macros : lex does not like it.*/
 DIGIT                   [0-9]
 INTEGER                 ({DIGIT}{DIGIT}*)            
 %%
-([a-zA-Z0-9\!\£\$\\%\\^\&\(\)\-\+\_\=\[\]\{\}\;\'\@\#\~\,\.])*\.(ads|adb)   { yylval.id = malloc((strlen(yytext)+1)*sizeof(char));
+([a-zA-Z0-9\!\ï¿½\$\\%\\^\&\(\)\-\+\_\=\[\]\{\}\;\'\@\#\~\,\.])*\.(ads|adb)   { yylval.id = malloc((strlen(yytext)+1)*sizeof(char));
                                                                              strcpy(yylval.id, yytext);
                                                                              //all the filenames mentionned in foo.xref are added to a binary tree of filenames (see binary_filename.c)
                                                                              // this structure is then checked during parsing of foo.bind in ada.y to see if a file mantionned in foo.bind should really be added to the queue of file code to analyse
@@ -99,7 +108,7 @@ INTEGER                 ({DIGIT}{DIGIT}*)
                               return(ENTITY);
                             }
 
-([a-zA-Z0-9\!\£\$\\%\\^\&\(\)\-\+\_\=\[\]\{\}\;\'\@\#\~\,])*\.([a-zA-Z0-9\_])*  { yylval.id = malloc((strlen(yytext)+1)*sizeof(char));
+([a-zA-Z0-9\!\ï¿½\$\\%\\^\&\(\)\-\+\_\=\[\]\{\}\;\'\@\#\~\,])*\.([a-zA-Z0-9\_])*  { yylval.id = malloc((strlen(yytext)+1)*sizeof(char));
                                                                   strcpy(yylval.id, yytext);
                                                                   return(SUBUNIT);
                                                                 }
@@ -119,6 +128,8 @@ INTEGER                 ({DIGIT}{DIGIT}*)
 //                              then code files according to elaboration order (including foo.ads)
 int yywrap()
 {
+  extern char *get_next_ali();
+  extern int debugMode;
   char *ali_file;
   fclose(yyin);
   yylineno = 0;  //re-initialisation for new file
@@ -167,7 +178,7 @@ void read_up_to_DLETTER(FILE *f)
     } while (fgetc(f) != '\n');
     yylineno++;
     ch = fgetc(f);
-	if (ch == 'D') break;
+    if (ch == 'D') break;
     ungetc(ch, f);
   } while (1);
   ungetc('D', f);
